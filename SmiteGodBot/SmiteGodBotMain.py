@@ -1,5 +1,6 @@
 import asyncio
-
+import mysql.connector
+from mysql.connector import connect, Error
 import discord
 from discord.ext import commands
 from discord.utils import get
@@ -7,7 +8,11 @@ from dotenv import load_dotenv
 
 from numpy import random as random
 import numpy as np
+import matplotlib.pyplot as plt
 import os
+import datetime
+
+import SmiteGodBot.smiteguruscraper
 
 Gods = [['Achilles',        'Warrior',  'Greek',        'No'],
         ['Agni',            'Mage',     'Hindu',        'No'],
@@ -110,7 +115,7 @@ Gods = [['Achilles',        'Warrior',  'Greek',        'No'],
         ['The Morrigan',    'Mage',     'Celtic',       'No'],
         ['Thor',            'Assassin', 'Norse',        'No'],
         ['Thoth',           'Mage',     'Egyptian',     'No'],
-        #['Tiamat',          'Mage',     'Babylonian',   'No'],
+        ['Tiamat',          'Mage',     'Babylonian',   'No'],
         ['Tsukuyomi',       'Assassin', 'Japanese',     'No'],
         ['Tyr',             'Warrior',  'Norse',        'No'],
         ['Ullr',            'Hunter',   'Norse',        'No'],
@@ -123,40 +128,67 @@ Gods = [['Achilles',        'Warrior',  'Greek',        'No'],
         ['Zeus',            'Mage',     'Greek',        'No'],
         ['Zhong Kui',       'Mage',     'Chinese',      'No']]
 
-
-
 client = commands.Bot(command_prefix='.')
 global voice
 global mute
 global rLoki
+global customGame
+global customGods
 global currentMatch
 global orderRerolls
 global chaosRerolls
+global connector
+global cursor
+
+load_dotenv()
+
+
+try:
+    cnx = mysql.connector.connect(
+        host="localhost",
+        user=os.getenv('SQL_USER'),
+        password=os.getenv('SQL_PASS'),
+        database="customs")
+    crsr = cnx.cursor()
+    connector = cnx
+    cursor = crsr
+except Error as e:
+    print(e)
+
 
 #0 = Name, 1 = Role, 2 = Pantheon, 3 = Healer (Yes/No)
 @client.event
 async def on_ready():
     global mute
     mute = 1
+    await client.change_presence(activity=discord.Game(name='with stats'))
     print('Bot is ready and connected')
 
-"""
-@client.event
-async def on_voice_state_update(member,before,after):
-    global mute
-    if before.channel is None and after.channel is not None and mute == 0:
-        if member.name == "BigMaple":
-            print("BigMaple Spotted")
-            channel = member.voice.channel
-            voice = get(client.voice_clients)
-            if voice and voice.is_connected():
-                await voice.move_to(channel)
-            else:
-                voice = await channel.connect()
-            voice.play(discord.FFmpegPCMAudio("Voicelines/BigMaple.mp3"))
-            voice.source = discord.PCMVolumeTransformer(voice.source)
-            voice.source.volume = 0.20
-"""
+
+@client.command()
+async def reset(ctx):
+    global connector
+    global cursor
+    try:
+        cnx = mysql.connector.connect(
+            host="localhost",
+            user=os.getenv('SQL_USER'),
+            password=os.getenv('SQL_PASS'),
+            database="customs")
+        crsr = cnx.cursor()
+        connector = cnx
+        cursor = crsr
+    except Error as e:
+        print(e)
+
+@client.command()
+async def goodbot(ctx):
+    await client.change_presence(activity=discord.Game(name='Good Bot Simulator'))
+
+@client.command()
+async def badbot(ctx):
+    await client.change_presence(activity=discord.Game(name='Bad Bot Simulator'))
+
 
 @client.command()
 async def commands(ctx):
@@ -478,8 +510,7 @@ async def reroll(ctx, *, rerollGod):
                                                            '\n' + "Chaos: " + ", ".join(currentMatch[1]),
                                                      inline=True)
                         embedAssaultReroll.add_field(name="Rerolls Remaining",
-                                                     value="Order: " + str(orderRerolls) + '\n' + "Chaos: " + str(
-                                                         chaosRerolls),
+                                                     value=(str(orderRerolls) + '\n' +str(chaosRerolls)).center(10),
                                                      inline=True)
                         await ctx.send(embed=embedAssaultReroll)
 
@@ -527,13 +558,335 @@ async def reroll(ctx, *, rerollGod):
                                                            '\n' + "Chaos: " + ", ".join(currentMatch[1]),
                                                      inline=True)
                         embedAssaultReroll.add_field(name="Rerolls Remaining",
-                                                     value="Order: " + str(orderRerolls) + '\t' + "Chaos: " + str(chaosRerolls),
+                                                     value=("Order: " + str(orderRerolls) + '\t' + "Chaos: " + str(chaosRerolls)).center(10),
                                                      inline=True)
                         await ctx.send(embed=embedAssaultReroll)
 
             if changeGod == 0:
                 await ctx.send(f' God could not be found on the Chaos Team.')
 
-load_dotenv()
+@client.command()
+async def addresult(ctx, *, result):
+    result.strip("'")
+    resultList = result.split(' ')
+    if(len(resultList) > 2 | len(resultList) == 0):
+        await ctx.send(f'Please input the correct format: NAME(optional) WIN/LOSS')
+    else:
+        if (len(resultList) == 1):
+            name = ctx.author.name
+            resultString = resultList[0].lower()
+        else:
+            name = resultList[0].lower()
+            resultString = resultList[1].lower()
+        if(resultString == "win"):
+            matchResult = "win"
+            query = "INSERT INTO players (name, result, date) VALUES (%s, %s, %s)"
+            data = (name, matchResult, datetime.date.today().strftime('%Y-%m-%d'))
+            insertResult(query, data)
+
+            await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
+        elif(resultString == "loss"):
+            matchResult = "loss"
+            query = "INSERT INTO players (name, result, date) VALUES (%s, %s, %s)"
+            data = (name, matchResult, datetime.date.today().strftime('%Y-%m-%d'))
+            insertResult(query, data)
+
+            await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
+        else:
+            await ctx.send(f'Invalid result. Please use win/loss')
+
+@client.command()
+async def addgodresult(ctx, *, result):
+    result.strip("'")
+    resultList = result.split(' ')
+    if(len(resultList) != 2):
+        await ctx.send(f'Please input the correct format: NAME WIN/LOSS')
+    else:
+        name = resultList[0].lower()
+        resultString = resultList[1].lower()
+
+        if(resultString == "win"):
+            matchResult = "win"
+            query = "INSERT INTO gods (god, result, date) VALUES (%s, %s, %s)"
+            data = (name, matchResult, datetime.date.today().strftime('%Y-%m-%d'))
+            insertResult(query, data)
+
+            await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
+        elif(resultString == "loss"):
+            matchResult = "loss"
+            query = "INSERT INTO gods (god, result, date) VALUES (%s, %s, %s)"
+            data = (name, matchResult, datetime.date.today().strftime('%Y-%m-%d'))
+            insertResult(query, data)
+
+            await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
+        else:
+            await ctx.send(f'Invalid result. Please use win/loss')
+
+@client.command()
+async def playerstats(ctx, *, name):
+    global connector
+    global cursor
+    name = name.strip("'")
+    name = name.strip(" ")
+    if name == "":
+        name = ctx.author.name
+
+    query = "SELECT COUNT(*) FROM players WHERE name = (%s) AND result = (%s)"
+    data = (name, "win")
+    cursor.execute(query, data)
+    wincount = cursor.fetchall()[0][0]
+    cursor.reset()
+
+    query = "SELECT COUNT(*) FROM players WHERE name = (%s) AND result = (%s)"
+    data = (name, "loss")
+    cursor.execute(query, data)
+    losscount = cursor.fetchall()[0][0]
+    cursor.reset()
+
+    totalgames = wincount+losscount
+    if totalgames >0:
+        wlrate = str(round(wincount / totalgames * 100,2))
+        embedStats = discord.Embed(title=name + "'s Stats",
+                                           color=0xeb4034,
+                                           description= str(wlrate) +"% winrate with " + str(totalgames) + " games played.")
+        embedStats.add_field(name="Overall Game Stats",
+                                     value="Games Won: " + str(wincount) +
+                                           '\n' + "Games Lost: " + str(losscount))
+        await ctx.send(embed=embedStats)
+    else:
+        await ctx.send(f'{name} has not played any games.')
+
+@client.command()
+async def godstats(ctx, *, name):
+    global connector
+    global cursor
+    name = name.strip("'")
+    name = name.strip(" ")
+    if name == "":
+        name = ctx.author.name
+
+    query = "SELECT COUNT(*) FROM gods WHERE god = (%s) AND result = (%s)"
+    data = (name, "win")
+    cursor.execute(query, data)
+    wincount = cursor.fetchall()[0][0]
+    cursor.reset()
+
+    query = "SELECT COUNT(*) FROM gods WHERE god = (%s) AND result = (%s)"
+    data = (name, "loss")
+    cursor.execute(query, data)
+    losscount = cursor.fetchall()[0][0]
+    cursor.reset()
+
+    totalgames = wincount+losscount
+    if totalgames >0:
+        wlrate = str(round(wincount / totalgames * 100,2))
+        embedStats = discord.Embed(title=name + " Stats",
+                                           color=0xeb4034,
+                                           description= str(wlrate) +"% winrate with " + str(totalgames) + " games played.")
+        embedStats.add_field(name="Overall Game Stats",
+                                     value="Games Won: " + str(wincount) +
+                                           '\n' + "Games Lost: " + str(losscount))
+        await ctx.send(embed=embedStats)
+    else:
+        await ctx.send(f'{name} has not been played in any games.')
+
+@client.command()
+async def banstats(ctx, *, name):
+    global connector
+    global cursor
+    name = name.strip("'")
+    name = name.strip(" ")
+
+    query = "SELECT COUNT(*) FROM bans WHERE god = (%s)"
+    data = (name,)
+    cursor.execute(query, data)
+    banTimes = cursor.fetchall()[0][0]
+    cursor.reset()
+
+    query = "SELECT COUNT(*) FROM matches"
+    cursor.execute(query)
+    totalGames = cursor.fetchall()[0][0]
+    cursor.reset()
+
+    if name == "awilix":
+        embedStats = discord.Embed(title="Awilix Ban Stats",
+                                   color=0xeb4034,
+                                   description="Awilix is banned forever.")
+        await ctx.send(embed=embedStats)
+        return
+    if totalGames > 0:
+        wlrate = str(round(banTimes / totalGames * 100,2))
+        embedStats = discord.Embed(title=name + " Ban Stats",
+                                           color=0xeb4034,
+                                           description= str(wlrate) +"% ban rate with " + str(totalGames) + " games played.")
+        await ctx.send(embed=embedStats)
+    else:
+        await ctx.send(f'{name} has not been played in any games.')
+
+@client.command()
+async def currentgame(ctx, *, players):
+    global customGame
+    if len(players.split(" ")) != 10:
+        await ctx.send(f'Only 10 player games are supported currently. Please retry with 10 players.')
+        return
+    customGame = players.split(" ")
+    embedCustomGame = discord.Embed(title="Custom Match",
+                                       color=0x00fff2)
+                                       #description="Current custom match")
+    embedCustomGame.add_field(name="Current Teams",
+                                 value="Order: " +  customGame[0] + ", " +
+                                                    customGame[1] + ", " +
+                                                    customGame[2] + ", " +
+                                                    customGame[3] + ", " +
+                                                    customGame[4] + '\n' +
+                                       "Chaos: " +  customGame[5] + ", " +
+                                                    customGame[6] + ", " +
+                                                    customGame[7] + ", " +
+                                                    customGame[8] + ", " +
+                                                    customGame[9],
+                                 inline=False)
+    await ctx.send(embed=embedCustomGame)
+
+@client.command()
+async def currentgods(ctx, *, gods):
+    global customGods
+
+    if len(gods.split(" ")) != 10:
+        await ctx.send(f'Only 10 player games are supported currently. Please retry with 10 players.')
+        return
+    customGods = gods.split(" ")
+    embedCustomGods = discord.Embed(title="Custom Match",
+                                       color=0x00fff2)
+                                       #description="Current custom match")
+    embedCustomGods.add_field(name="Current Teams",
+                                 value="Order: " +  customGods[0] + ", " +
+                                                    customGods[1] + ", " +
+                                                    customGods[2] + ", " +
+                                                    customGods[3] + ", " +
+                                                    customGods[4] + '\n' +
+                                       "Chaos: " +  customGods[5] + ", " +
+                                                    customGods[6] + ", " +
+                                                    customGods[7] + ", " +
+                                                    customGods[8] + ", " +
+                                                    customGods[9],
+                                 inline=False)
+    await ctx.send(embed=embedCustomGods)
+
+@client.command()
+async def endgame(ctx, *, result):
+    global customGame
+    global customGods
+
+    if len(customGame) != 10:
+        await ctx.send(f'No active game. Use "currentGame" to set up a game.')
+        return
+
+    if result.lower() == "order":
+        counter = 0
+        for player in customGame:
+            if counter <= 4:
+                if len(customGods) == 10:
+                    insertGodResult(customGods[counter], "win")
+                insertMatchResult(player, "win")
+            else:
+                if len(customGods) == 10:
+                    insertGodResult(customGods[counter], "loss")
+                insertMatchResult(player,"loss")
+            counter+=1
+        recordMatch("order")
+        await ctx.send(f'Order team won the match. Updating stats.')
+    elif result.lower() == "chaos":
+        counter = 0
+        for player in customGame:
+            if counter <= 4:
+                if len(customGods) == 10:
+                    insertGodResult(customGods[counter], "loss")
+                insertMatchResult(player, "loss")
+            else:
+                if len(customGods) == 10:
+                    insertGodResult(customGods[counter], "win")
+                insertMatchResult(player, "win")
+            counter += 1
+        recordMatch("chaos")
+        await ctx.send(f'Chaos team won the match. Updating stats.')
+    else:
+        await ctx.send(f'Unknown result {result}. Try order/chaos.')
+
+    customGame = ()
+    customGods = ()
+
+@client.command()
+async def testEric(ctx):
+    data = dailyEricUpdate()
+    #file = discord.File("ericstats.png")
+    embedStats = discord.Embed(title="Eric\'s Regular Stat Update",
+                               color=0xeb4034,
+                               description= f'Eric\'s current conquest winrate: {data}%')
+    #embedStats.set_image(url="attachment://ericstats.png")
+    await ctx.send(embed=embedStats, file=file)
+    #await ctx.send(f'Eric\'s current conquest winrate: {data}%')
+
+
+def recordMatch(result):
+    global customGame
+    if result == "order":
+        winner = "order"
+        loser = "chaos"
+    else:
+        winner = "chaos"
+        loser = "order"
+    query = "INSERT INTO matches (order1, order2, order3, order4, order5, chaos1, chaos2," \
+            " chaos3, chaos4, chaos5, winner, loser, date) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    data = (customGame[0], customGame[1], customGame[2], customGame[3], customGame[4],
+            customGame[5], customGame[6], customGame[7], customGame[8], customGame[9],
+            winner,loser, datetime.date.today().strftime('%Y-%m-%d'))
+    insertResult(query, data)
+
+def insertMatchResult(name, result):
+    query = "INSERT INTO players (name, result, date) VALUES (%s, %s, %s)"
+    data = (name, result, datetime.date.today().strftime('%Y-%m-%d'))
+    insertResult(query,data)
+
+def insertGodResult(god, result):
+    query = "INSERT INTO gods (god, result, date) VALUES (%s, %s, %s)"
+    data = (god, result, datetime.date.today().strftime('%Y-%m-%d'))
+    insertResult(query,data)
+
+def insertResult(query, data):
+    global connector
+    global cursor
+    cursor.execute(query, data)
+    connector.commit()
+    print(f'{query},{data} was inserted into the database.')
+
+def dailyEricUpdate():
+    currentWinLoss = float(SmiteGodBot.smiteguruscraper.scrapeData(""))
+    query = "INSERT INTO erichistory (result, date) VALUES (%s, %s)"
+    data = (currentWinLoss, datetime.date.today().strftime('%Y-%m-%d'))
+    #insertResult(query, data)
+    plotHistory()
+    return currentWinLoss
+
+def plotHistory():
+    query = "SELECT result FROM erichistory"
+    cursor.execute(query)
+    wlstats = cursor.fetchall()
+    for stat in wlstats:
+        if stat[0] < 1:
+            stat = stat[0]*100
+    cursor.reset()
+
+    plt.style.use('seaborn-darkgrid')
+    palette = plt.get_cmap('Set1')
+    print(wlstats)
+    plt.plot( wlstats, marker='', color='red', linewidth=1.9, alpha=0.9)
+
+    # Same limits for everybody!
+    plt.ylim(0, 100)
+    plt.savefig('ericstats.png', bbox_inches='tight')
+    print(f'ericstats.png created.')
+
+
 client.run(os.getenv('SMITEGODBOT_TOKEN'))
+
 
