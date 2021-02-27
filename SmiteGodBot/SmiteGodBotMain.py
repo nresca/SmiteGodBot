@@ -823,7 +823,8 @@ async def testEric(ctx):
                                color=0xeb4034,
                                description= f'Eric\'s current conquest winrate: {data}%')
     #embedStats.set_image(url="attachment://ericstats.png")
-    await ctx.send(embed=embedStats, file=file)
+    #await ctx.send(embed=embedStats, file=file)
+    await ctx.send(embed=embedStats)
     #await ctx.send(f'Eric\'s current conquest winrate: {data}%')
 
 
