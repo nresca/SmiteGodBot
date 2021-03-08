@@ -303,7 +303,6 @@ async def unmute(ctx):
     mute = 0
     await ctx.send(f'Bot has been unmuted')
 
-
 @client.command()
 async def voiceline(ctx, *, god):
     global mute
@@ -384,7 +383,6 @@ async def leave(ctx):
         await ctx.send(f'Bot is not currently in any voice channel')
 
 ##def rGod_Voice(channel):
-
 
 @client.command(aliases=['rteam', 'rt'])
 async def rTeam(ctx, *, players):
@@ -567,6 +565,7 @@ async def reroll(ctx, *, rerollGod):
 
 @client.command()
 async def addresult(ctx, *, result):
+    resetDB()
     result.strip("'")
     resultList = result.split(' ')
     if(len(resultList) > 2 | len(resultList) == 0):
@@ -597,6 +596,7 @@ async def addresult(ctx, *, result):
 
 @client.command()
 async def addgodresult(ctx, *, result):
+    resetDB()
     result.strip("'")
     resultList = result.split(' ')
     if(len(resultList) != 2):
@@ -626,6 +626,8 @@ async def addgodresult(ctx, *, result):
 async def playerstats(ctx, *, name):
     global connector
     global cursor
+
+    resetDB()
     name = name.strip("'")
     name = name.strip(" ")
     if name == "":
@@ -660,6 +662,8 @@ async def playerstats(ctx, *, name):
 async def godstats(ctx, *, name):
     global connector
     global cursor
+    resetDB()
+
     name = name.strip("'")
     name = name.strip(" ")
     if name == "":
@@ -694,6 +698,8 @@ async def godstats(ctx, *, name):
 async def banstats(ctx, *, name):
     global connector
     global cursor
+    resetDB()
+
     name = name.strip("'")
     name = name.strip(" ")
 
@@ -776,6 +782,7 @@ async def currentgods(ctx, *, gods):
 async def endgame(ctx, *, result):
     global customGame
     global customGods
+    resetDB()
 
     if len(customGame) != 10:
         await ctx.send(f'No active game. Use "currentGame" to set up a game.')
@@ -817,14 +824,15 @@ async def endgame(ctx, *, result):
 
 @client.command()
 async def testEric(ctx):
+    resetDB()
     data = dailyEricUpdate()
-    #file = discord.File("ericstats.png")
+    file = discord.File("ericstats.png")
     embedStats = discord.Embed(title="Eric\'s Regular Stat Update",
                                color=0xeb4034,
                                description= f'Eric\'s current conquest winrate: {data}%')
-    #embedStats.set_image(url="attachment://ericstats.png")
-    #await ctx.send(embed=embedStats, file=file)
-    await ctx.send(embed=embedStats)
+    embedStats.set_image(url="attachment://ericstats.png")
+    await ctx.send(embed=embedStats, file=file)
+    #await ctx.send(embed=embedStats)
     #await ctx.send(f'Eric\'s current conquest winrate: {data}%')
 
 
@@ -868,6 +876,21 @@ def dailyEricUpdate():
     plotHistory()
     return currentWinLoss
 
+def resetDB():
+    global connector
+    global cursor
+    try:
+        cnx = mysql.connector.connect(
+            host="localhost",
+            user=os.getenv('SQL_USER'),
+            password=os.getenv('SQL_PASS'),
+            database="customs")
+        crsr = cnx.cursor()
+        connector = cnx
+        cursor = crsr
+    except Error as e:
+        print(e)
+
 def plotHistory():
     query = "SELECT result FROM erichistory"
     cursor.execute(query)
@@ -879,12 +902,13 @@ def plotHistory():
 
     plt.style.use('seaborn-darkgrid')
     palette = plt.get_cmap('Set1')
+    plt.figure(figsize=(8, 6))
     print(wlstats)
     plt.plot( wlstats, marker='', color='red', linewidth=1.9, alpha=0.9)
 
     # Same limits for everybody!
     plt.ylim(0, 100)
-    plt.savefig('ericstats.png', bbox_inches='tight')
+    plt.savefig('ericstats.png', bbox_inches='tight', dpi = 100)
     print(f'ericstats.png created.')
 
 
