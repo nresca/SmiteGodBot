@@ -159,15 +159,12 @@ try:
 except Error as e:
     print(e)
 
-
-
 @client.event
 async def on_ready():
     global mute
     mute = 1
     await client.change_presence(activity=discord.Game(name='with stats'))
     print('Bot is ready and connected')
-
 
 @client.command()
 async def reset(ctx):
@@ -597,17 +594,6 @@ async def addresult(ctx, *, result):
             await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
         else:
             await ctx.send(f'Invalid result. Please use win/loss')
-
-'''
-@client.command()
-async def doesericsuck(ctx):
-    await ctx.send("yes.")
-    
-@client.command()
-async def boge(ctx):
-    await ctx.send("Happy birthday Boge!")
-'''
-
 
 @client.command()
 async def addgodresult(ctx, *, result):
