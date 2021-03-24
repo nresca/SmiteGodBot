@@ -17,6 +17,7 @@ import time
 
 import SmiteGodBot.smiteguruscraper
 
+#0 = Name, 1 = Role, 2 = Pantheon, 3 = Healer (Yes/No)
 Gods = [['Achilles',        'Warrior',  'Greek',        'No'],
         ['Agni',            'Mage',     'Hindu',        'No'],
         ['Ah Muzen Cab',    'Hunter',   'Mayan',        'No'],
@@ -159,7 +160,7 @@ except Error as e:
     print(e)
 
 
-#0 = Name, 1 = Role, 2 = Pantheon, 3 = Healer (Yes/No)
+
 @client.event
 async def on_ready():
     global mute
