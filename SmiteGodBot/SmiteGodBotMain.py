@@ -5,12 +5,15 @@ import discord
 from discord.ext import commands
 from discord.utils import get
 from dotenv import load_dotenv
+from adjustText import adjust_text
 
 from numpy import random as random
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import datetime
+import time
+
 
 import SmiteGodBot.smiteguruscraper
 
@@ -580,19 +583,30 @@ async def addresult(ctx, *, result):
         if(resultString == "win"):
             matchResult = "win"
             query = "INSERT INTO players (name, result, date) VALUES (%s, %s, %s)"
-            data = (name, matchResult, datetime.date.today().strftime('%Y-%m-%d'))
+            data = (name, matchResult, time.strftime('%Y-%m-%d %H:%M:%S'))
             insertResult(query, data)
 
             await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
         elif(resultString == "loss"):
             matchResult = "loss"
             query = "INSERT INTO players (name, result, date) VALUES (%s, %s, %s)"
-            data = (name, matchResult, datetime.date.today().strftime('%Y-%m-%d'))
+            data = (name, matchResult, time.strftime('%Y-%m-%d %H:%M:%S'))
             insertResult(query, data)
 
             await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
         else:
             await ctx.send(f'Invalid result. Please use win/loss')
+
+'''
+@client.command()
+async def doesericsuck(ctx):
+    await ctx.send("yes.")
+    
+@client.command()
+async def boge(ctx):
+    await ctx.send("Happy birthday Boge!")
+'''
+
 
 @client.command()
 async def addgodresult(ctx, *, result):
@@ -608,14 +622,14 @@ async def addgodresult(ctx, *, result):
         if(resultString == "win"):
             matchResult = "win"
             query = "INSERT INTO gods (god, result, date) VALUES (%s, %s, %s)"
-            data = (name, matchResult, datetime.date.today().strftime('%Y-%m-%d'))
+            data = (name, matchResult, time.strftime('%Y-%m-%d %H:%M:%S'))
             insertResult(query, data)
 
             await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
         elif(resultString == "loss"):
             matchResult = "loss"
             query = "INSERT INTO gods (god, result, date) VALUES (%s, %s, %s)"
-            data = (name, matchResult, datetime.date.today().strftime('%Y-%m-%d'))
+            data = (name, matchResult, time.strftime('%Y-%m-%d %H:%M:%S'))
             insertResult(query, data)
 
             await ctx.send(f'{ctx.author.name} added {name}, {matchResult}, {datetime.date.today()} to match history.')
@@ -673,6 +687,12 @@ async def godstats(ctx, *, name):
     data = (name, "win")
     cursor.execute(query, data)
     wincount = cursor.fetchall()[0][0]
+    cursor.reset()
+
+    query = "SELECT COUNT(*) FROM gods WHERE god = (%s) AND result = (%s)"
+    data = (name, "loss")
+    cursor.execute(query, data)
+    losscount = cursor.fetchall()[0][0]
     cursor.reset()
 
     query = "SELECT COUNT(*) FROM gods WHERE god = (%s) AND result = (%s)"
@@ -836,6 +856,17 @@ async def testEric(ctx):
     #await ctx.send(f'Eric\'s current conquest winrate: {data}%')
 
 
+@client.command()
+async def allstats(ctx):
+    resetDB()
+    allStats = globalstats()
+    allPlot(allStats)
+    file = discord.File("allPlot.png")
+    embedStats = discord.Embed(title="All W/L Stats",
+                               color=0xeb4034)
+    embedStats.set_image(url="attachment://allPlot.png")
+    await ctx.send(embed=embedStats, file=file)
+
 def recordMatch(result):
     global customGame
     if result == "order":
@@ -848,17 +879,17 @@ def recordMatch(result):
             " chaos3, chaos4, chaos5, winner, loser, date) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
     data = (customGame[0], customGame[1], customGame[2], customGame[3], customGame[4],
             customGame[5], customGame[6], customGame[7], customGame[8], customGame[9],
-            winner,loser, datetime.date.today().strftime('%Y-%m-%d'))
+            winner,loser, time.strftime('%Y-%m-%d %H:%M:%S'))
     insertResult(query, data)
 
 def insertMatchResult(name, result):
     query = "INSERT INTO players (name, result, date) VALUES (%s, %s, %s)"
-    data = (name, result, datetime.date.today().strftime('%Y-%m-%d'))
+    data = (name, result, time.strftime('%Y-%m-%d %H:%M:%S'))
     insertResult(query,data)
 
 def insertGodResult(god, result):
     query = "INSERT INTO gods (god, result, date) VALUES (%s, %s, %s)"
-    data = (god, result, datetime.date.today().strftime('%Y-%m-%d'))
+    data = (god, result, time.strftime('%Y-%m-%d %H:%M:%S'))
     insertResult(query,data)
 
 def insertResult(query, data):
@@ -871,7 +902,7 @@ def insertResult(query, data):
 def dailyEricUpdate():
     currentWinLoss = float(SmiteGodBot.smiteguruscraper.scrapeData(""))
     query = "INSERT INTO erichistory (result, date) VALUES (%s, %s)"
-    data = (currentWinLoss, datetime.date.today().strftime('%Y-%m-%d'))
+    data = (currentWinLoss, time.strftime('%Y-%m-%d %H:%M:%S'))
     #insertResult(query, data)
     plotHistory()
     return currentWinLoss
@@ -911,6 +942,66 @@ def plotHistory():
     plt.savefig('ericstats.png', bbox_inches='tight', dpi = 100)
     print(f'ericstats.png created.')
 
+def allPlot(allStats):
+    #print(allStats)
+    plt.style.use('seaborn-darkgrid')
+    plt.figure(figsize=(8, 6))
+    num = 0
+    texts = []
+
+
+    for player in allStats:
+        num+=1
+        playerName = player.pop(0)
+        texts.append(plt.text(len(player)-1, player[len(player)-1], playerName, fontsize=6))
+        plt.plot(player, marker='', linewidth=1, alpha=0.9,label = playerName)
+    plt.title("All Playerstats")
+    plt.xlabel("Games Played")
+    plt.ylabel("Net Points")
+    plt.axis([None, None, -10, 10])
+    plt.axhline(0, color='black')
+    plt.axvline(0, color='black')
+    plt.yticks(np.arange(-10, 10, 2))
+    adjust_text(texts, autoalign='', only_move={'text':'y'}, force_text=0.75, avoid_points = False)
+    print("allPlot.png created.")
+    plt.savefig('allPlot.png', dpi = 300)
+
+def globalstats():
+    query = "SELECT DISTINCT name FROM players"
+    cursor.execute(query)
+    allstatsReturn = cursor.fetchall()
+    cursor.reset()
+    allPlayers = []
+    for stat in allstatsReturn:
+        statStr = "".join(stat)
+        statStr = statStr.replace('(', '').replace(')', '').replace(',', '').replace("'", '')
+        allPlayers.append(statStr)
+    #print(allPlayers)
+
+    allPlayerStats = []
+    for player in allPlayers:
+        query = "SELECT result FROM players WHERE name = '"+player+"' ORDER BY date"
+        cursor.execute(query)
+
+        playerStatTuple = cursor.fetchall()
+        playerStatTemp = [player]
+        cursor.reset()
+
+        startVal = 0
+        playerStatTemp.append(startVal)
+        for stat in playerStatTuple:
+            statStr = "".join(stat)
+            statStr = statStr.replace('(', '').replace(')', '').replace(',', '').replace("'", '')
+            if statStr == "loss":
+                startVal -= 1
+                playerStatTemp.append(startVal)
+            else:
+                startVal += 1
+                playerStatTemp.append(startVal)
+
+        allPlayerStats.append(playerStatTemp)
+
+    return allPlayerStats
 
 client.run(os.getenv('SMITEGODBOT_TOKEN'))
 
